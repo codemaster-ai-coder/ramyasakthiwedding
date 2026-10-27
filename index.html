@@ -220,7 +220,7 @@ section{padding:54px 24px;position:relative}
 .pick input{display:none}
 .pick .btn{width:100%;justify-content:center;padding:14px 20px}
 .ulist{margin-top:16px;display:grid;gap:8px;font-size:14px}
-.ulist div{display:flex;justify-content:space-between;gap:10px;background:#fff;border:1px solid #f0d9a0;border-radius:12px;padding:9px 12px}
+.ulist div{flex-wrap:wrap;display:flex;justify-content:space-between;gap:10px;background:#fff;border:1px solid #f0d9a0;border-radius:12px;padding:9px 12px}
 .ulist .ok{color:var(--green);font-weight:700}.ulist .bad{color:#b3261e;font-weight:700}
 .note{font-size:12px;color:#7a4b57;text-align:center;margin-top:14px}
 
@@ -488,6 +488,7 @@ footer .btns{display:flex;flex-direction:column;gap:12px;align-items:center;marg
 
   function openUpload(){
     if(!ready){toast("Photo sharing will open on the wedding day. Stay tuned!");return}
+    $("cam").value="";$("pic").value="";
     sheet.classList.add("on");
   }
   $("sx").onclick=function(){sheet.classList.remove("on")};
@@ -526,7 +527,8 @@ footer .btns{display:flex;flex-direction:column;gap:12px;align-items:center;marg
   function shrink(file){
     return new Promise(function(res){
       if(!window.createImageBitmap||file.size<600*1024){return res(file)}
-      createImageBitmap(file).then(function(bm){
+      var cb;try{cb=createImageBitmap(file)}catch(e){return res(file)}
+      cb.then(function(bm){
         var s=Math.min(1,MAX_PX/Math.max(bm.width,bm.height));
         if(s===1&&file.size<2.5*1024*1024){return res(file)}
         var c=document.createElement("canvas");c.width=Math.round(bm.width*s);c.height=Math.round(bm.height*s);
@@ -542,14 +544,14 @@ footer .btns{display:flex;flex-direction:column;gap:12px;align-items:center;marg
       fd.append("upload_preset",UPLOAD_PRESET);
       fd.append("tags",TAG);
       return fetch("https://api.cloudinary.com/v1_1/"+CLOUD_NAME+"/image/upload",{method:"POST",body:fd});
-    }).then(function(r){if(!r.ok)throw 0;return r.json()})
+    }).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j&&j.error&&j.error.message)||("HTTP "+r.status));return j},function(){throw new Error("HTTP "+r.status)})})
       .then(function(j){
         st.textContent="Added ✓";st.className="ok";
         var u=j.secure_url||"";
         var th=u.replace("/upload/","/upload/c_fill,w_300,h_300,q_auto,f_auto/");
         var fu=u.replace("/upload/","/upload/q_auto,f_auto,w_1600/");
         if(u)addTile(th,fu,true);
-      }).catch(function(){st.textContent="Failed, try again";st.className="bad"});
+      }).catch(function(e){var m=(e&&e.message)?e.message:"network error";st.textContent="Failed: "+m.slice(0,90);st.className="bad"});
   }
   function handle(files){
     files=Array.prototype.slice.call(files).filter(function(f){return /^image\//.test(f.type)||/\.(heic|heif)$/i.test(f.name)}).slice(0,MAX_FILES);
@@ -569,7 +571,7 @@ footer .btns{display:flex;flex-direction:column;gap:12px;align-items:center;marg
     })();
   }
   ["cam","pic"].forEach(function(id){
-    var el=$(id);el.onchange=function(){if(el.files&&el.files.length)handle(el.files);el.value=""};
+    var el=$(id);el.onchange=function(){if(el.files&&el.files.length)handle(el.files)};
   });
 
   $("upload").onclick=openUpload;$("fab").onclick=openUpload;
